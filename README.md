@@ -1,22 +1,22 @@
-# Project 1 — vLLM on EKS (Terraform + NVIDIA GPU Operator)
+# Project 1 — Production-Grade LLM Serving with vLLM on Amazon EKS
+(Terraform + NVIDIA GPU Operator)
 
 One model, one GPU, served over vLLM's OpenAI-compatible API. Every piece of infrastructure
 comes from Terraform, so the cluster can be rebuilt or destroyed with one command.
 
-This is the foundation project. Multi-model routing (#2) and GPU observability (#4) are built
-on the same cluster.
+This is the foundation project. 
+Multi-model routing (#2) and GPU observability (#4) are built ultilizing the same cluster.
 
 **Done when:** `curl .../v1/completions` returns tokens from a GPU node that Terraform created,
 and I can read the GPU's memory usage and defend the `--gpu-memory-utilization` and
-`--max-model-len` values I picked. Those two flags are the KV-cache-vs-OOM tradeoff, and that's
-the part interviewers actually poke at.
+`--max-model-len` values I picked.
+Those two flags are the KV-cache-vs-OOM tradeoff.
 
 ## What's actually being deployed
 
-There is no app and no dataset here. The deliverable is an **inference API**: an HTTP endpoint
-that takes a prompt and returns generated text. Everything below exists to get one model onto
-one GPU and keep it serving. That is the AI infra job. Someone else trains the model and someone
-else builds the product on top.
+There is no app and no dataset here. The deliverable is an **inference API**: an HTTP endpointthat takes a prompt and returns generated text. 
+Everything below exists to get one model onto one GPU and keep it serving.
+This is the AI infra job. Someone else trains the model and someone else builds the product on top.
 
 | Layer | Tool | What it does here |
 |---|---|---|
@@ -31,7 +31,7 @@ else builds the product on top.
 **Why self-host instead of calling an API?** Cost at scale, prompts that never leave the VPC,
 latency you control, and the ability to run whatever model you want.
 
-## Decisions I locked before building
+## Technologies locked:
 
 - **AWS EKS**, provisioned by Terraform.
 - **`Qwen/Qwen2.5-7B-Instruct-AWQ`** as the model. Ungated on Hugging Face, so no token to
@@ -70,7 +70,7 @@ roughly 13 GB of the 24 GB for KV cache once context and overhead are paid for.
 Pinning the vLLM image matters more than it looks. `:latest` changes engine defaults under you,
 and then a config that worked yesterday OOMs today.
 
-## Layout
+## Project Layout
 
 ```
 vllm-serving-eks/
@@ -155,7 +155,7 @@ Other details:
 
 ### KV cache vs OOM
 
-This is the flag question, so here's the arithmetic.
+This is the flagship discussion, so here's the Math-
 
 `--gpu-memory-utilization=0.90` means vLLM may touch about 21.6 GB of the 24 GB card. Out of
 that comes ~1 GB of CUDA context, ~5.5 GB of AWQ weights and ~1–2 GB of activations. Everything
