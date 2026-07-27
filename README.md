@@ -1,4 +1,3 @@
-# Project 1:
 # Production-Grade LLM Serving with vLLM on Amazon EKS
 (Terraform + NVIDIA GPU Operator)
 
