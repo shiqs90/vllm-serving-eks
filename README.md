@@ -1,56 +1,56 @@
-# Project 1 — vLLM Serving Foundation on EKS (Terraform + NVIDIA GPU Operator)
+# Project 1 — vLLM on EKS (Terraform + NVIDIA GPU Operator)
 
-## Context
+One model, one GPU, served over vLLM's OpenAI-compatible API. Every piece of infrastructure
+comes from Terraform, so the cluster can be rebuilt or destroyed with one command.
 
-Production-grade LLM serving foundation: vLLM running on a GPU provisioned end-to-end with
-infrastructure-as-code. Part 1 of a series (multi-model routing and GPU observability build
-on this cluster).
+This is the foundation project. Multi-model routing (#2) and GPU observability (#4) are built
+on the same cluster.
 
-**Definition of done :** One model answers through vLLM's
-OpenAI-compatible API on an EKS GPU node provisioned with Terraform; `curl .../v1/completions`
-returns tokens, **and** I can read GPU memory utilization and justify the
-`--gpu-memory-utilization` and `--max-model-len` flags (the KV-cache-vs-OOM tradeoff).
+**Done when:** `curl .../v1/completions` returns tokens from a GPU node that Terraform created,
+and I can read the GPU's memory usage and defend the `--gpu-memory-utilization` and
+`--max-model-len` values I picked. Those two flags are the KV-cache-vs-OOM tradeoff, and that's
+the part interviewers actually poke at.
 
-**Locked decisions:**
-- Cloud: **AWS EKS**, provisioned with Terraform.
-- Model: **`Qwen/Qwen2.5-7B-Instruct-AWQ`** (ungated on HF, ~5–6 GB weights, no token needed).
-- Driver/AMI: **Option A** — EKS accelerated AMI (`AL2023_x86_64_NVIDIA`) ships the driver;
-  the GPU Operator runs with `driver.enabled=false` and still owns the device plugin, DCGM
-  exporter, and time-slicing config (reused by the observability and GPU-sharing projects).
-  Chosen because the Operator installing the driver on Amazon Linux 2023 is **unsupported**
-  by NVIDIA, and this path is the AWS-recommended, simplest, fastest-booting option.
-- Packaging: **Helm** installs the GPU Operator (via Terraform's `helm_release` in
-  `gpu-operator.tf`); **vLLM is deployed with plain `kubectl apply`** — a single Deployment
-  doesn't need a chart, and raw YAML iterates faster on flags.
-- Build style: plan-first, then build checkpoint-by-checkpoint.
+## What's actually being deployed
 
-## What this is — orientation & glossary
+There is no app and no dataset here. The deliverable is an **inference API**: an HTTP endpoint
+that takes a prompt and returns generated text. Everything below exists to get one model onto
+one GPU and keep it serving. That is the AI infra job. Someone else trains the model and someone
+else builds the product on top.
 
-There is **no custom App or dataset** here. 
-What gets deployed is an **inference API**: an HTTP endpoint that takes a prompt and returns generated text. Everything below exists to put one model on one GPU and serve it reliably — which is precisely the AI Infrastructure
-Engineer's job --> operate the serving platform, not train the model or build the app on top.
-
-**The layers, top to bottom:**
-
-| Layer | Tool | What it does here (2-liner) |
+| Layer | Tool | What it does here |
 |---|---|---|
-| Provisioning (IaC) | **Terraform** | Declares the cloud infra as code — VPC, EKS cluster, and the GPU node — so the environment is reproducible and tear-down-able with one command. |
-| Orchestration | **Kubernetes (EKS)** | Runs and supervises the serving container: schedules it onto the GPU node, restarts it on failure, handles networking/scaling. The control layer that makes serving *production-grade*, not a one-off script. |
-| GPU enablement | **NVIDIA GPU Operator** | Makes Kubernetes actually *see and use* the GPU (driver, device plugin, metrics). Without it, k8s has no idea a GPU exists. |
-| Serving engine | **vLLM** | The inference server: loads the model onto the GPU and serves it fast (PagedAttention + continuous batching = high throughput, low latency). Exposes an OpenAI-compatible API. |
-| Model (payload) | **Qwen2.5-7B-Instruct-AWQ** | The LLM being served — turns prompts into text. AWQ = 4-bit quantized so a 7B model fits in a 24 GB GPU with room for KV-cache. Just the payload that proves the stack works. |
-| Package manager | **Helm** | Kubernetes' package installer — deploys pre-templated, configurable bundles ("charts") in one command. Used here (via Terraform `helm_release`) to install the **GPU Operator** chart = ~6 components at once. *vLLM itself is plain `kubectl apply`, not Helm.* In Row 2, the whole vLLM stack + router is one chart. |
-| Test client | **curl** | Hits `/v1/completions` to prove the end]point returns tokens — the checkpoint. |
+| Provisioning | **Terraform** | Declares the VPC, EKS cluster and GPU node as code. Reproducible, and destroyable in one command. |
+| Orchestration | **Kubernetes (EKS)** | Schedules the serving container onto the GPU node, restarts it when it dies, handles networking. This is what makes it a service instead of a script. |
+| GPU enablement | **NVIDIA GPU Operator** | Makes Kubernetes aware the GPU exists. Without it, the scheduler sees a plain machine and `nvidia.com/gpu` is never advertised. |
+| Serving engine | **vLLM** | Loads the model onto the GPU and serves it. PagedAttention plus continuous batching are what make it fast. Exposes an OpenAI-compatible API. |
+| Model | **Qwen2.5-7B-Instruct-AWQ** | The payload. AWQ is 4-bit quantized, so a 7B model fits on a 24 GB card with plenty of room left for KV cache. |
+| Package manager | **Helm** | Installs the GPU Operator chart (roughly six components) in one go, via Terraform's `helm_release`. vLLM is *not* Helm here, just `kubectl apply`. |
+| Test client | **curl** | Hits `/v1/completions`. That response is the checkpoint. |
 
-**Why self-host instead of calling Claude/OpenAI?** Because *
-Self-hosting your own infra wins on cost-at-scale, data privacy (prompts stay in your VPC),
-latency, and model control
+**Why self-host instead of calling an API?** Cost at scale, prompts that never leave the VPC,
+latency you control, and the ability to run whatever model you want.
+
+## Decisions I locked before building
+
+- **AWS EKS**, provisioned by Terraform.
+- **`Qwen/Qwen2.5-7B-Instruct-AWQ`** as the model. Ungated on Hugging Face, so no token to
+  manage, and ~5–6 GB of weights.
+- **The AMI ships the driver, not the Operator.** EKS's accelerated AMI
+  (`AL2023_x86_64_NVIDIA`) already has the NVIDIA driver, so the GPU Operator runs with
+  `driver.enabled=false`. It still owns the device plugin, DCGM exporter and time-slicing
+  config, all of which later projects reuse. The alternative (letting the Operator install the
+  driver) is officially unsupported on Amazon Linux 2023.
+- **Helm for the Operator, raw YAML for vLLM.** A single Deployment doesn't need a chart, and
+  editing YAML is faster than re-templating when you're iterating on engine flags.
 
 ## Hardware
 
-1× **g6.xlarge** GPU node (NVIDIA **L4, 24 GB VRAM**, Ada — ~$0.805/hr, 100 GB gp3 root) plus
-1× **m7i.large** CPU system node so system pods never occupy the GPU. The L4 is sized from the
-model: Qwen2.5-7B in 4-bit AWQ ≈ 5.3 GB of weights, leaving ~13 GB of the 24 GB for KV-cache.
+1× **g6.xlarge** (NVIDIA L4, 24 GB VRAM, ~$0.805/hr, 100 GB gp3 root) for the model, plus
+1× **m7i.large** CPU node so that CoreDNS and friends never land on the expensive card.
+
+The L4 was sized from the model. Qwen2.5-7B in 4-bit AWQ is about 5.3 GB of weights, which leaves
+roughly 13 GB of the 24 GB for KV cache once context and overhead are paid for.
 
 ## Pinned versions
 
@@ -58,154 +58,188 @@ model: Qwen2.5-7B in 4-bit AWQ ≈ 5.3 GB of weights, leaving ~13 GB of the 24 G
 |---|---|
 | Terraform | ≥ 1.5 |
 | AWS provider | ~> 6.0 |
-| terraform-aws-modules/vpc/aws | ~> 6.0 (single-NAT) |
+| terraform-aws-modules/vpc/aws | ~> 6.0 (single NAT) |
 | terraform-aws-modules/eks/aws | ~> 21.0 |
-| EKS cluster version | 1.33 |
-| GPU node AMI type | `AL2023_x86_64_NVIDIA` (accelerated) |
-| GPU instance | `g6.xlarge` (L4, 24 GB, ~$0.80/hr) — fallback `g5.xlarge` (A10G) |
-| NVIDIA GPU Operator chart | v26.3.2 (`driver.enabled=false`, `toolkit.enabled=false`) |
-| vLLM image | `vllm/vllm-openai:v0.22.1` (do NOT use `:latest`) |
+| EKS cluster | 1.33 |
+| GPU AMI type | `AL2023_x86_64_NVIDIA` |
+| GPU instance | `g6.xlarge` (L4 24 GB), fallback `g5.xlarge` (A10G) |
+| GPU Operator chart | v26.3.2, `driver.enabled=false`, `toolkit.enabled=false` |
+| vLLM image | `vllm/vllm-openai:v0.22.1` (never `:latest`) |
 | Model | `Qwen/Qwen2.5-7B-Instruct-AWQ` |
 
-## Repo / file layout
+Pinning the vLLM image matters more than it looks. `:latest` changes engine defaults under you,
+and then a config that worked yesterday OOMs today.
+
+## Layout
 
 ```
 vllm-serving-eks/
   terraform/
-    versions.tf      # provider + module version pins
-    providers.tf     # aws, kubernetes, helm providers (helm uses EKS auth)
-    variables.tf     # region, cluster_version, gpu_instance_type (default g6.xlarge)
-    vpc.tf           # terraform-aws-modules/vpc ~>6.0, single NAT gateway
-    eks.tf           # terraform-aws-modules/eks ~>21.0; system + gpu node groups
-    gpu-operator.tf  # helm_release nvidia/gpu-operator v26.3.2 (driver.enabled=false)
-    outputs.tf       # cluster_name + `aws eks update-kubeconfig` command
+    versions.tf      # provider + module pins
+    providers.tf     # aws, kubernetes, helm (helm authenticates through EKS)
+    variables.tf     # region, cluster_version, gpu_instance_type
+    vpc.tf           # terraform-aws-modules/vpc, single NAT gateway
+    eks.tf           # EKS + system and GPU node groups
+    gpu-operator.tf  # helm_release nvidia/gpu-operator
+    outputs.tf       # cluster name + the update-kubeconfig command
   k8s/
     vllm-deployment.yaml  # Deployment + ClusterIP Service
   scripts/
     smoke-test.sh    # port-forward + curl /v1/completions
-  README.md          # KV-cache math, build sequence, checkpoint evidence
 ```
 
-Split: GPU Operator lives in Terraform as a `helm_release` (so `terraform destroy` cleans it
-up); the vLLM manifest stays plain YAML applied with `kubectl` (faster flag iteration than
-re-applying TF).
+The GPU Operator lives in Terraform so `terraform destroy` cleans it up with everything else.
+vLLM stays as a plain manifest because that's the file I edit most.
 
-## Key implementation details
+## The parts worth knowing
 
-### Terraform (`eks.tf`)
-- EKS module v21: `authentication_mode = "API"`, `enable_cluster_creator_admin_permissions = true`
-  (v21 defaults this to false — without it you lock yourself out of `kubectl`).
-- **System node group** (`m7i.large`, desired 1) so CoreDNS / Operator controller / metrics land
-  off the GPU node.
-- **GPU node group**:
-  ```hcl
-  ami_type       = "AL2023_x86_64_NVIDIA"
-  instance_types = ["g6.xlarge"]        # fallback: ["g5.xlarge"]
-  min_size = 0; max_size = 1; desired_size = 1
-  block_device_mappings = { xvda = { ebs = { volume_size = 100, volume_type = "gp3" } } }
-  labels = { "workload" = "gpu" }
-  taints = { gpu = { key = "nvidia.com/gpu", value = "present", effect = "NO_SCHEDULE" } }
-  ```
-  `min_size=0` enables scale-to-zero for cost.
+### `eks.tf`
 
-### GPU Operator (`gpu-operator.tf`)
-- `helm_release` from `https://helm.ngc.nvidia.com/nvidia`, chart `gpu-operator` v26.3.2.
-- Values: `driver.enabled=false`, `toolkit.enabled=false`; add a `daemonsets.tolerations`
-  entry for `nvidia.com/gpu Exists NoSchedule` (custom taint value).
-- Device plugin, GFD, DCGM exporter, NFD stay enabled (defaults) — these feed Rows 3 & 4.
+EKS module v21 needs `authentication_mode = "API"` and
+`enable_cluster_creator_admin_permissions = true`. v21 defaults that second one to `false`, and
+if you miss it you lock yourself out of your own cluster with `kubectl`.
 
-### vLLM (`k8s/vllm-deployment.yaml`)
-- Image entrypoint already runs the API server — pass model/flags via `args`, never `command`.
-- Args (24 GB starting point):
-  ```
-  --model=Qwen/Qwen2.5-7B-Instruct-AWQ
-  --quantization=awq_marlin        # NOT plain "awq" (that forces the slow kernel)
-  --dtype=float16
-  --gpu-memory-utilization=0.90
-  --max-model-len=8192
-  --max-num-seqs=16
-  --port=8000
-  ```
-- `resources.limits["nvidia.com/gpu"] = 1`; modest cpu/mem requests (e.g. 2 cpu / 8Gi).
-- `tolerations`: `nvidia.com/gpu Exists NoSchedule`; `nodeSelector: { workload: gpu }`.
-- Probes tolerant of slow first boot (5–6 GB pull + model load): `startupProbe` GET `/health`
-  `failureThreshold: 60, periodSeconds: 10` (~10 min); readiness/liveness GET `/health` after.
-- No `HF_TOKEN` (model is ungated). Optional HF cache on emptyDir.
-- `Service` ClusterIP :8000, reached via `kubectl port-forward` for the checkpoint.
+The **system node group** (`m7i.large`, desired 1) keeps CoreDNS, the Operator controller and
+metrics off the GPU node.
 
-### KV-cache-vs-OOM rationale (documented in README)
-24 GB budget ≈ CUDA context ~1 GB + AWQ weights ~5.5 GB + activations ~1–2 GB → **~14–16 GB
-for KV cache**. `--gpu-memory-utilization 0.90` sets the ceiling vLLM allocates KV cache under;
-`--max-model-len` bounds per-sequence context (Qwen2.5-7B ≈ ~64 KB/token, so 8192 ≈ ~0.5 GB
-for one full-length sequence). **OOM remedy order:** lower `--gpu-memory-utilization` (0.90→0.85→0.80),
-then `--max-model-len` (8192→4096), then `--max-num-seqs`, then `--enforce-eager` as a diagnostic.
-Capture vLLM's startup "# GPU blocks" / KV-cache line as evidence.
+The **GPU node group**:
 
-## Build sequence (each step has a verification check)
+```hcl
+ami_type       = "AL2023_x86_64_NVIDIA"
+instance_types = ["g6.xlarge"]        # fallback: ["g5.xlarge"]
+min_size = 0; max_size = 1; desired_size = 1
+block_device_mappings = { xvda = { ebs = { volume_size = 100, volume_type = "gp3" } } }
+labels = { "workload" = "gpu" }
+taints = { gpu = { key = "nvidia.com/gpu", value = "present", effect = "NO_SCHEDULE" } }
+```
 
-1. **Quota** — request EC2 "Running On-Demand G and VT Instances" ≥ 8 vCPU.
-   *Verify:* Service Quotas shows applied quota ≥ 8. **(#1 blocker — 0 by default on new accounts.)**
-2. **`terraform apply`** VPC + EKS + node groups.
-   *Verify:* `aws eks update-kubeconfig …` then `kubectl get nodes` → 1 system + 1 GPU node `Ready`.
-3. **Confirm taint/label** on GPU node.
-   *Verify:* `kubectl describe node <gpu>` shows the taint + `workload=gpu`.
-4. **GPU Operator** comes up (installed via the `helm_release` in step 2).
-   *Verify:* `kubectl -n gpu-operator get pods` healthy; node advertises `nvidia.com/gpu: "1"`.
+The taint keeps everything except GPU workloads off the node. `min_size = 0` is what lets me
+scale the expensive part to zero between sessions.
+
+### `gpu-operator.tf`
+
+Chart `gpu-operator` v26.3.2 from `https://helm.ngc.nvidia.com/nvidia`, with
+`driver.enabled=false` and `toolkit.enabled=false` because the AMI already provides both.
+
+One thing that bites: the Operator's DaemonSets need a toleration for the custom taint
+(`nvidia.com/gpu Exists NoSchedule`), or they never land on the GPU node and the node never
+advertises a GPU.
+
+Device plugin, GFD, DCGM exporter and NFD stay on. Projects 2 and 4 depend on them.
+
+### `k8s/vllm-deployment.yaml`
+
+The image's entrypoint already starts the API server, so pass everything through `args`. Using
+`command` overrides the entrypoint and nothing starts.
+
+```
+--model=Qwen/Qwen2.5-7B-Instruct-AWQ
+--quantization=awq_marlin        # not plain "awq", which selects the slow kernel
+--dtype=float16
+--gpu-memory-utilization=0.90
+--max-model-len=8192
+--max-num-seqs=16
+--port=8000
+```
+
+Other details:
+
+- `resources.limits["nvidia.com/gpu"] = 1`, plus modest CPU/memory requests (2 CPU, 8 Gi).
+- `tolerations` for `nvidia.com/gpu Exists NoSchedule`, and `nodeSelector: { workload: gpu }`.
+- First boot is slow: a 5–6 GB image pull followed by a model load. The `startupProbe` on
+  `/health` uses `failureThreshold: 60, periodSeconds: 10`, giving it ten minutes before
+  Kubernetes gives up. Readiness and liveness take over after that. Without a generous startup
+  probe you get a restart loop that looks like a crash but is just a slow model load.
+- No `HF_TOKEN`, since the model is ungated.
+- ClusterIP Service on 8000, reached with `kubectl port-forward`.
+
+### KV cache vs OOM
+
+This is the flag question, so here's the arithmetic.
+
+`--gpu-memory-utilization=0.90` means vLLM may touch about 21.6 GB of the 24 GB card. Out of
+that comes ~1 GB of CUDA context, ~5.5 GB of AWQ weights and ~1–2 GB of activations. Everything
+left over, roughly 13–14 GB, becomes KV cache. KV cache is the leftover, not a reservation,
+which is why a cap set too low produces a negative number and the engine refuses to start.
+
+`--max-model-len` bounds the context of a single sequence. Qwen2.5-7B costs roughly 64 KB per
+token, so 8192 tokens is about 0.5 GB for one sequence at full length.
+
+**If it OOMs, turn these down in this order:** `--gpu-memory-utilization` (0.90 → 0.85 → 0.80),
+then `--max-model-len` (8192 → 4096), then `--max-num-seqs`. Reach for `--enforce-eager` last,
+and mostly as a diagnostic: it drops CUDA graphs, which frees a few hundred MB but costs you
+speed.
+
+vLLM prints a "# GPU blocks" / KV cache line at startup. That line is the evidence that your
+math was right.
+
+## Build sequence
+
+Each step has something to check before moving on.
+
+1. **Quota.** Request EC2 "Running On-Demand G and VT Instances" ≥ 8 vCPU.
+   *Check:* Service Quotas shows the applied quota. **This is the number one blocker. New
+   accounts sit at 0, and approval takes anywhere from minutes to two days.**
+2. **`terraform apply`** for VPC, EKS and both node groups.
+   *Check:* `aws eks update-kubeconfig …`, then `kubectl get nodes` shows 1 system + 1 GPU node
+   `Ready`.
+3. **Taint and label** on the GPU node.
+   *Check:* `kubectl describe node <gpu-node>` shows the taint and `workload=gpu`.
+4. **GPU Operator** settles (it installed itself during step 2).
+   *Check:* `kubectl -n gpu-operator get pods` is healthy and the node advertises
+   `nvidia.com/gpu: "1"`. If that number never appears, look at DaemonSet tolerations first.
 5. **`kubectl apply -f k8s/vllm-deployment.yaml`.**
-   *Verify:* pod schedules on the GPU node (not Pending); logs show the KV-cache line; `/health` 200.
-6. **Checkpoint curl** via `kubectl port-forward svc/vllm 8000:8000`:
-   `curl /v1/completions -d '{"model":"Qwen/Qwen2.5-7B-Instruct-AWQ","prompt":"Hello, my name is","max_tokens":20}'`.
-   *Verify:* returns tokens.
-7. **Read GPU mem** — `kubectl exec deploy/vllm -- nvidia-smi` (and optionally curl the DCGM
-   exporter's `DCGM_FI_DEV_FB_USED` as a bridge to Row 4).
-   *Verify:* VRAM-used captured; tune flags + document rationale if OOM.
-8. **Cost down** — scale GPU group to 0 (back tomorrow) or `terraform destroy` (done with Row 1).
-   *Verify:* `kubectl get nodes` shows no GPU node. Set a $20 AWS Budgets alert as backstop.
+   *Check:* the pod schedules on the GPU node rather than sitting `Pending`, the logs show the
+   KV cache line, and `/health` returns 200.
+6. **The checkpoint curl**, through `kubectl port-forward svc/vllm 8000:8000`:
+   ```bash
+   curl localhost:8000/v1/completions -d '{"model":"Qwen/Qwen2.5-7B-Instruct-AWQ","prompt":"Hello, my name is","max_tokens":20}'
+   ```
+   *Check:* tokens come back. `scripts/smoke-test.sh` does this for you.
+7. **Read the GPU.** `kubectl exec deploy/vllm -- nvidia-smi`, and optionally curl the DCGM
+   exporter for `DCGM_FI_DEV_FB_USED` as a preview of project 4.
+   *Check:* you have a VRAM number and it lines up with the math above.
+8. **Turn it off.** Scale the GPU group to 0 if you're back tomorrow, or `terraform destroy` if
+   you're done.
+   *Check:* `kubectl get nodes` shows no GPU node.
 
-## Verification (end-to-end)
+## Cost
 
-The project is verified end-to-end when step 6 returns generated tokens through the
-OpenAI-compatible API and step 7 produces the GPU-memory reading + a written justification
-of the two flags. `scripts/smoke-test.sh` automates 6; this README captures the evidence
-(token output + `nvidia-smi` reading + KV-cache math).
-
-## Approximate cost (us-east-1, on-demand)
-
-Per-component hourly:
+Per component, us-east-1 on-demand:
 
 | Component | $/hr |
 |---|---|
 | EKS control plane | 0.10 |
-| GPU node `g6.xlarge` (L4) | ~0.805 (fallback `g5.xlarge` ~1.006) |
+| GPU node `g6.xlarge` (L4) | ~0.805 (`g5.xlarge` is ~1.006) |
 | System node `m7i.large` | ~0.10 |
-| NAT gateway (single) | ~0.045 + ~$0.045/GB data |
-| EBS gp3 (100 GB GPU + ~20 GB system) | ~$0.013/hr (~$10/mo) |
+| NAT gateway (single) | ~0.045 plus ~$0.045/GB |
+| EBS gp3 (100 GB + ~20 GB) | ~$0.013/hr, about $10/mo |
 
-Three states that matter:
+Three states are worth remembering:
 
 | State | ~$/hr | What's running |
 |---|---|---|
-| **Active** (working on it) | **~$1.05/hr** | everything up — this is the only time the GPU bills |
-| **Scaled to 0** (GPU group `desired=0`, back tomorrow) | **~$0.25/hr** (~$6/day) | control plane + system node + NAT + EBS; GPU stopped |
-| **Destroyed** (`terraform destroy`) | **$0** | nothing |
+| **Active** | **~$1.05** | Everything. The only state where the GPU bills. |
+| **GPU scaled to 0** | **~$0.25** (~$6/day) | Control plane, system node, NAT, EBS. |
+| **Destroyed** | **$0** | Nothing. |
 
-Practical totals:
-- A focused **Row-1 session (5–8h)**: **~$6–9**.
-- Leaving it **scaled-to-0 overnight** still costs ~$6/day — not free. For multi-day gaps, **destroy**.
-- Leaving **everything running 24/7 for a month**: **~$780** — don't. (GPU alone is ~$588/mo.)
+In practice: a focused 5–8 hour session runs **$6–9**. Leaving it scaled to zero overnight is
+**not free**, it's about $6/day, so destroy it if you're away for more than a day. Leaving the
+whole thing up for a month is roughly **$780**, of which the GPU alone is $588. Destroy between
+sessions and the entire project lands somewhere around **$15–30**.
 
-The whole Row-1 exercise, if you destroy between sessions, should land in the **~$15–30** range.
+## Guardrails
 
-## Cost guardrails
-- `min_size=0` → scale GPU node group to zero between sessions (control plane ~$0.10/hr + system
-  node + single NAT keep running ≈ $0.25/hr, the ~$0.80/hr GPU stops).
-- `terraform destroy` when done for days — the only true $0 state (also kills control plane + NAT).
-- Tag everything `project=vllm-serving-eks`; set a **$20 AWS Budgets alert** as a backstop.
+- `min_size = 0` on the GPU group, so scaling to zero is always available.
+- `terraform destroy` is the only true $0 state. It's the one that also kills the control plane
+  and NAT gateway.
+- Tag everything `project=vllm-serving-eks` and set a **$20 AWS Budgets alert**. The alert is
+  the backstop for the night you forget.
 
-## Still open (decide before/at build time)
-- **AWS account & local credentials** — assumes `aws sts get-caller-identity` works and the GPU
-  vCPU quota request (step 1) is approved. Quota approval can take minutes to 24–48h and gates
-  everything.
-- **Region** — default `us-east-1`; switch if g6/g5 capacity is short (`InsufficientInstanceCapacity`).
-- **g6 vs g5** — plan defaults to g6.xlarge (L4, cheaper); one-variable fallback to g5.xlarge (A10G)
-  if capacity/quota differs.
+## Before you start
+
+- **AWS credentials.** `aws sts get-caller-identity` should work, and the GPU vCPU quota from
+  step 1 must be approved. The quota gates everything else.
+- **Region.** Default is `us-east-1`. Switch if you hit `InsufficientInstanceCapacity` on g6/g5.
+- **g6 vs g5.** g6.xlarge (L4) is the default and the cheaper card. g5.xlarge (A10G) is the
+  one-variable fallback if capacity or quota doesn't line up.
