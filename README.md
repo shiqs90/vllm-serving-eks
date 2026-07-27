@@ -1,4 +1,4 @@
-# Production-Grade LLM Serving with vLLM on Amazon EKS
+# #1: Production-Grade LLM Serving with vLLM on Amazon EKS
 (Terraform + NVIDIA GPU Operator)
 
 One model, one GPU, served over vLLM's OpenAI-compatible API. Every piece of infrastructure
