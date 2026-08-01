@@ -4,6 +4,8 @@
 One model, one GPU, served over vLLM's OpenAI-compatible API. Every piece of infrastructure
 comes from Terraform, so the cluster can be rebuilt or destroyed with one command.
 
+![vLLM model serving on Amazon EKS](docs/vllm-serving-eks-architecture.drawio.png)
+
 This is the foundation project. 
 Multi-model routing (#2) and GPU observability (#4) are built ultilizing the same cluster.
 
@@ -91,88 +93,6 @@ vllm-serving-eks/
 The GPU Operator lives in Terraform so `terraform destroy` cleans it up with everything else.
 vLLM stays as a plain manifest because that's the file I edit most.
 
-## The parts worth knowing
-
-### `eks.tf`
-
-EKS module v21 needs `authentication_mode = "API"` and
-`enable_cluster_creator_admin_permissions = true`. v21 defaults that second one to `false`, and
-if you miss it you lock yourself out of your own cluster with `kubectl`.
-
-The **system node group** (`m7i.large`, desired 1) keeps CoreDNS, the Operator controller and
-metrics off the GPU node.
-
-The **GPU node group**:
-
-```hcl
-ami_type       = "AL2023_x86_64_NVIDIA"
-instance_types = ["g6.xlarge"]        # fallback: ["g5.xlarge"]
-min_size = 0; max_size = 1; desired_size = 1
-block_device_mappings = { xvda = { ebs = { volume_size = 100, volume_type = "gp3" } } }
-labels = { "workload" = "gpu" }
-taints = { gpu = { key = "nvidia.com/gpu", value = "present", effect = "NO_SCHEDULE" } }
-```
-
-The taint keeps everything except GPU workloads off the node. `min_size = 0` is what lets me
-scale the expensive part to zero between sessions.
-
-### `gpu-operator.tf`
-
-Chart `gpu-operator` v26.3.2 from `https://helm.ngc.nvidia.com/nvidia`, with
-`driver.enabled=false` and `toolkit.enabled=false` because the AMI already provides both.
-
-One thing that bites: the Operator's DaemonSets need a toleration for the custom taint
-(`nvidia.com/gpu Exists NoSchedule`), or they never land on the GPU node and the node never
-advertises a GPU.
-
-Device plugin, GFD, DCGM exporter and NFD stay on. Projects 2 and 4 depend on them.
-
-### `k8s/vllm-deployment.yaml`
-
-The image's entrypoint already starts the API server, so pass everything through `args`. Using
-`command` overrides the entrypoint and nothing starts.
-
-```
---model=Qwen/Qwen2.5-7B-Instruct-AWQ
---quantization=awq_marlin        # not plain "awq", which selects the slow kernel
---dtype=float16
---gpu-memory-utilization=0.90
---max-model-len=8192
---max-num-seqs=16
---port=8000
-```
-
-Other details:
-
-- `resources.limits["nvidia.com/gpu"] = 1`, plus modest CPU/memory requests (2 CPU, 8 Gi).
-- `tolerations` for `nvidia.com/gpu Exists NoSchedule`, and `nodeSelector: { workload: gpu }`.
-- First boot is slow: a 5–6 GB image pull followed by a model load. The `startupProbe` on
-  `/health` uses `failureThreshold: 60, periodSeconds: 10`, giving it ten minutes before
-  Kubernetes gives up. Readiness and liveness take over after that. Without a generous startup
-  probe you get a restart loop that looks like a crash but is just a slow model load.
-- No `HF_TOKEN`, since the model is ungated.
-- ClusterIP Service on 8000, reached with `kubectl port-forward`.
-
-### KV cache vs OOM
-
-This is the flagship discussion, so here's the Math-
-
-`--gpu-memory-utilization=0.90` means vLLM may touch about 21.6 GB of the 24 GB card. Out of
-that comes ~1 GB of CUDA context, ~5.5 GB of AWQ weights and ~1–2 GB of activations. Everything
-left over, roughly 13–14 GB, becomes KV cache. KV cache is the leftover, not a reservation,
-which is why a cap set too low produces a negative number and the engine refuses to start.
-
-`--max-model-len` bounds the context of a single sequence. Qwen2.5-7B costs roughly 64 KB per
-token, so 8192 tokens is about 0.5 GB for one sequence at full length.
-
-**If it OOMs, turn these down in this order:** `--gpu-memory-utilization` (0.90 → 0.85 → 0.80),
-then `--max-model-len` (8192 → 4096), then `--max-num-seqs`. Reach for `--enforce-eager` last,
-and mostly as a diagnostic: it drops CUDA graphs, which frees a few hundred MB but costs you
-speed.
-
-vLLM prints a "# GPU blocks" / KV cache line at startup. That line is the evidence that your
-math was right.
-
 ## Build sequence
 
 Each step has something to check before moving on.
@@ -243,7 +163,3 @@ sessions and the entire project lands somewhere around **$15–30**.
 - **Region.** Default is `us-east-1`. Switch if you hit `InsufficientInstanceCapacity` on g6/g5.
 - **g6 vs g5.** g6.xlarge (L4) is the default and the cheaper card. g5.xlarge (A10G) is the
   one-variable fallback if capacity or quota doesn't line up.
-
-## Architecture
-
-![vLLM model serving on Amazon EKS](docs/vllm-serving-eks-architecture.drawio.png)
