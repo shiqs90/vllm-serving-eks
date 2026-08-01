@@ -243,3 +243,7 @@ sessions and the entire project lands somewhere around **$15–30**.
 - **Region.** Default is `us-east-1`. Switch if you hit `InsufficientInstanceCapacity` on g6/g5.
 - **g6 vs g5.** g6.xlarge (L4) is the default and the cheaper card. g5.xlarge (A10G) is the
   one-variable fallback if capacity or quota doesn't line up.
+
+## Architecture
+
+![vLLM model serving on Amazon EKS](docs/vllm-serving-eks-architecture.drawio.png)
