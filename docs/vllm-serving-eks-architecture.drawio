@@ -5,7 +5,7 @@
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
         <mxCell id="title-group" connectable="0" parent="1" style="group;fontFamily=Helvetica;" value="" vertex="1">
-          <mxGeometry height="83" width="1250" x="50" y="20" as="geometry" />
+          <mxGeometry height="83" width="1365" x="478" y="905" as="geometry" />
         </mxCell>
         <mxCell id="title-text" parent="title-group" style="text;html=1;resizable=1;points=[];autosize=1;align=left;verticalAlign=top;spacingTop=-4;fontSize=30;fontStyle=1;fontFamily=Helvetica;" value="vLLM Model Serving on Amazon EKS" vertex="1">
           <mxGeometry height="42" width="865.3846153846154" as="geometry" />
@@ -13,8 +13,8 @@
         <mxCell id="subtitle-text" parent="title-group" style="text;html=1;resizable=0;points=[];autosize=1;align=left;verticalAlign=top;spacingTop=-4;fontSize=16;fontFamily=Helvetica;" value="GPU inference endpoint serving model Qwen2.5-7B-AWQ&amp;nbsp;" vertex="1">
           <mxGeometry height="25" width="434" x="4.8076923076923075" y="40" as="geometry" />
         </mxCell>
-        <mxCell id="title-sep" parent="title-group" style="line;strokeWidth=2;html=1;fontSize=14;strokeColor=#FF9900;fontFamily=Helvetica;" value="" vertex="1">
-          <mxGeometry height="10" width="1240.3846153846155" x="4.8076923076923075" y="70" as="geometry" />
+        <mxCell id="legend-title" parent="title-group" style="text;html=1;align=left;verticalAlign=top;spacingTop=-4;fontSize=16;fontStyle=1;fontFamily=Helvetica;labelBackgroundColor=none;" value="Architecture Steps" vertex="1">
+          <mxGeometry height="25" width="340" x="1025" y="29" as="geometry" />
         </mxCell>
         <mxCell id="dev-container" parent="1" style="fillColor=#f5f5f5;strokeColor=light-dark(#666666,#D4D4D4);rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=12;fontColor=#333333;fontFamily=Helvetica;container=1;collapsible=0;shadow=1;strokeWidth=1;perimeterSpacing=0;" value="Developer" vertex="1">
           <mxGeometry height="120" width="107" x="60" y="170" as="geometry" />
@@ -212,28 +212,25 @@
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="legend-bg" parent="1" style="verticalLabelPosition=bottom;verticalAlign=top;html=1;shape=mxgraph.basic.rect;fillColor2=none;strokeWidth=1;size=20;indent=5;fillColor=light-dark(#EDF3FF,#305363);strokeColor=#6c8ebf;" value="" vertex="1">
-          <mxGeometry height="800" width="382" x="1389" y="90" as="geometry" />
-        </mxCell>
-        <mxCell id="legend-title" parent="1" style="text;html=1;align=left;verticalAlign=top;spacingTop=-4;fontSize=16;fontStyle=1;fontFamily=Helvetica;labelBackgroundColor=none;" value="Architecture Steps" vertex="1">
-          <mxGeometry height="25" width="340" x="1420" y="45" as="geometry" />
+          <mxGeometry height="773" width="382" x="1389" y="125" as="geometry" />
         </mxCell>
         <mxCell id="leg-step1-badge" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#007CBD;strokeColor=default;fontColor=#FFFFFF;fontStyle=1;fontSize=22;fontFamily=Helvetica;shadow=1;glass=0;strokeWidth=2;" value="1" vertex="1">
-          <mxGeometry height="38" width="40" x="1420" y="104" as="geometry" />
+          <mxGeometry height="38" width="40" x="1420" y="143.6" as="geometry" />
         </mxCell>
         <mxCell id="leg-step1-text" parent="1" style="text;html=1;align=left;verticalAlign=top;spacingTop=-4;fontSize=12;labelBackgroundColor=none;whiteSpace=wrap;fontFamily=Helvetica;fontColor=#232F3E;" value="&lt;b&gt;terraform apply&lt;/b&gt;&lt;br&gt;Provisions VPC, EKS cluster, and both node groups." vertex="1">
-          <mxGeometry height="70" width="295" x="1476" y="105" as="geometry" />
+          <mxGeometry height="51.6" width="295" x="1476" y="143.6" as="geometry" />
         </mxCell>
         <mxCell id="leg-step2-badge" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#007CBD;strokeColor=default;fontColor=#FFFFFF;fontStyle=1;fontSize=22;fontFamily=Helvetica;shadow=1;glass=0;strokeWidth=2;" value="2" vertex="1">
-          <mxGeometry height="38" width="40" x="1420" y="175" as="geometry" />
+          <mxGeometry height="38" width="40" x="1420" y="217" as="geometry" />
         </mxCell>
         <mxCell id="leg-step2-text" parent="1" style="text;html=1;align=left;verticalAlign=top;spacingTop=-4;fontSize=12;labelBackgroundColor=none;whiteSpace=wrap;fontFamily=Helvetica;fontColor=#232F3E;" value="&lt;b&gt;EKS spins up nodes&lt;/b&gt;&lt;br&gt;System node (m7i.large) runs CoreDNS. GPU node (g6.xlarge, L4 24 GB) is tainted for GPU-only workloads." vertex="1">
-          <mxGeometry height="80" width="295" x="1470" y="175" as="geometry" />
+          <mxGeometry height="57" width="295" x="1470" y="214" as="geometry" />
         </mxCell>
         <mxCell id="leg-step3-badge" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#007CBD;strokeColor=default;fontColor=#FFFFFF;fontStyle=1;fontSize=22;fontFamily=Helvetica;shadow=1;glass=0;strokeWidth=2;" value="3" vertex="1">
-          <mxGeometry height="38" width="40" x="1420" y="275" as="geometry" />
+          <mxGeometry height="38" width="40" x="1420" y="290" as="geometry" />
         </mxCell>
         <mxCell id="leg-step3-text" parent="1" style="text;html=1;align=left;verticalAlign=top;spacingTop=-4;fontSize=12;labelBackgroundColor=none;whiteSpace=wrap;fontFamily=Helvetica;fontColor=#232F3E;" value="&lt;b&gt;GPU Operator installed (Helm)&lt;/b&gt;&lt;br&gt;Exposes the NVIDIA L4 GPU to Kubernetes. Device plugin advertises nvidia.com/gpu: 1." vertex="1">
-          <mxGeometry height="80" width="295" x="1470" y="275" as="geometry" />
+          <mxGeometry height="65" width="295" x="1470" y="290" as="geometry" />
         </mxCell>
         <mxCell id="leg-step4-badge" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#007CBD;strokeColor=default;fontColor=#FFFFFF;fontStyle=1;fontSize=22;fontFamily=Helvetica;shadow=1;glass=0;strokeWidth=2;" value="4" vertex="1">
           <mxGeometry height="38" width="40" x="1420" y="375" as="geometry" />
