@@ -60,7 +60,7 @@ module "eks" {
       instance_types = [var.gpu_instance_type]
       min_size       = 0 # allows scale-to-zero between sessions for cost
       max_size       = 2
-      desired_size   = 2 # Row 2: one GPU per model behind the router (was 1 in Row 1)
+      desired_size   = 1 # For Multimodel serving project, use 1 GPU per each of the two models ie. 2
 
       # Default 20GB root is too small for the NVIDIA AMI + ~11GB vLLM image + HF cache.
       block_device_mappings = {
@@ -77,6 +77,7 @@ module "eks" {
         workload = "gpu"
       }
 
+# Taint reserves the GPU node for GPU work only
       taints = {
         gpu = {
           key    = "nvidia.com/gpu"

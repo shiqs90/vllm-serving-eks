@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Row 1 verification: proves vLLM serves tokens on the GPU and reads GPU memory.
+# Project verification: proves vLLM serves tokens on the GPU and reads GPU memory.
 # Handles the port-forward + cleanup for you. Run from anywhere; kubectl uses its current context.
 # Every command is printed (as "$ ...") right before it runs, so you can see what executes.
 set -uo pipefail
@@ -16,8 +16,8 @@ run() { echo "\$ $*"; "$@"; }
 echo "==> [0/4] Cluster context"
 run kubectl config current-context
 
-echo; echo "==> [1/4] Waiting for the vllm pod to be Ready (up to 5 min)..."
-run kubectl wait --for=condition=ready pod -l app=vllm --timeout=300s || {
+echo; echo "==> [1/4] Waiting for the vllm pod to be Ready (up to 15 min — first boot pulls ~11GB)..."
+run kubectl wait --for=condition=ready pod -l app=vllm --timeout=900s || {
   echo "FAIL: pod never became Ready. Check: kubectl get pods -l app=vllm ; kubectl logs deploy/vllm"
   exit 1
 }
@@ -53,4 +53,4 @@ echo; echo "==> KV-cache evidence from startup logs"
 echo "\$ kubectl logs deploy/vllm | grep -iE 'Available KV cache memory|GPU KV cache size|Maximum concurrency'"
 kubectl logs deploy/vllm 2>&1 | grep -iE "Available KV cache memory|GPU KV cache size|Maximum concurrency" | tail -3
 
-echo; echo "✅ Row 1 verification complete."
+echo; echo "✅ Project verification complete."

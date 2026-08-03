@@ -87,7 +87,7 @@ vllm-serving-eks/
   k8s/
     vllm-deployment.yaml  # Deployment + ClusterIP Service
   scripts/
-    smoke-test.sh    # port-forward + curl /v1/completions
+    verify.sh        # the one verification entry point: wait -> port-forward -> curl -> nvidia-smi
 ```
 
 The GPU Operator lives in Terraform so `terraform destroy` cleans it up with everything else.
@@ -111,15 +111,19 @@ Each step has something to check before moving on.
 5. **`kubectl apply -f k8s/vllm-deployment.yaml`.**
    *Check:* the pod schedules on the GPU node rather than sitting `Pending`, the logs show the
    KV cache line, and `/health` returns 200.
-6. **The checkpoint curl**, through `kubectl port-forward svc/vllm 8000:8000`:
+6. **Verify.** One entry point — `bash scripts/verify.sh` — which waits for the pod (up to 15 min,
+   because first boot pulls ~11 GB and loads weights), opens the port-forward itself, POSTs to
+   `/v1/completions`, then runs `nvidia-smi` in the pod and greps the KV-cache lines out of the
+   startup logs. It echoes every command before running it and exits non-zero on failure.
+   *Check:* it ends with `✅ Project verification complete.` If you'd rather do it by hand:
    ```bash
+   kubectl port-forward svc/vllm 8000:8000
    curl localhost:8000/v1/completions -d '{"model":"Qwen/Qwen2.5-7B-Instruct-AWQ","prompt":"Hello, my name is","max_tokens":20}'
+   kubectl exec deploy/vllm -- nvidia-smi
    ```
-   *Check:* tokens come back. `scripts/smoke-test.sh` does this for you.
-7. **Read the GPU.** `kubectl exec deploy/vllm -- nvidia-smi`, and optionally curl the DCGM
-   exporter for `DCGM_FI_DEV_FB_USED` as a preview of project 4.
-   *Check:* you have a VRAM number and it lines up with the math above.
-8. **Turn it off.** Scale the GPU group to 0 if you're back tomorrow, or `terraform destroy` if
+   Optionally curl the DCGM exporter for `DCGM_FI_DEV_FB_USED` as a preview of project 4.
+   *Check:* tokens come back, and the VRAM number lines up with the math above.
+7. **Turn it off.** Scale the GPU group to 0 if you're back tomorrow, or `terraform destroy` if
    you're done.
    *Check:* `kubectl get nodes` shows no GPU node.
 
