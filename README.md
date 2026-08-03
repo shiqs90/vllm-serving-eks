@@ -87,7 +87,8 @@ vllm-serving-eks/
   k8s/
     vllm-deployment.yaml  # Deployment + ClusterIP Service
   scripts/
-    verify.sh        # the one verification entry point: wait -> port-forward -> curl -> nvidia-smi
+    verify.sh             # the one verification entry point: wait -> port-forward -> curl -> nvidia-smi
+    gpu-nodes-scaling.sh  # scale the GPU node group in/out (Terraform can't — see the script header)
 ```
 
 The GPU Operator lives in Terraform so `terraform destroy` cleans it up with everything else.
@@ -123,8 +124,8 @@ Each step has something to check before moving on.
    ```
    Optionally curl the DCGM exporter for `DCGM_FI_DEV_FB_USED` as a preview of project 4.
    *Check:* tokens come back, and the VRAM number lines up with the math above.
-7. **Turn it off.** Scale the GPU group to 0 if you're back tomorrow, or `terraform destroy` if
-   you're done.
+7. **Turn it off.** `bash scripts/gpu-nodes-scaling.sh in` scales the GPU group to 0 if you're
+   back tomorrow (`out` brings it back); `terraform destroy` if you're done.
    *Check:* `kubectl get nodes` shows no GPU node.
 
 ## Cost

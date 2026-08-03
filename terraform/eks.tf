@@ -59,8 +59,10 @@ module "eks" {
       ami_type       = "AL2023_x86_64_NVIDIA"
       instance_types = [var.gpu_instance_type]
       min_size       = 0 # allows scale-to-zero between sessions for cost
-      max_size       = 2
-      desired_size   = 1 # For Multimodel serving project, use 1 GPU per each of the two models ie. 2
+      max_size       = 1 # P2 (multi-model) needs 2 — one GPU per model
+      # The module has ignore_changes on desired_size, so editing this alone does NOTHING
+      # to a live node group. max_size is what actually resizes it (ASG clamps desired <= max).
+      desired_size = 1
 
       # Default 20GB root is too small for the NVIDIA AMI + ~11GB vLLM image + HF cache.
       block_device_mappings = {
