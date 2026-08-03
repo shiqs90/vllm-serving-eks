@@ -97,6 +97,11 @@ vllm-serving-eks/
 The GPU Operator lives in Terraform so `terraform destroy` cleans it up with everything else.
 vLLM stays as a plain manifest because that's the file I edit most.
 
+## Setup
+
+You need AWS CLI, Terraform, kubectl and Helm locally, plus an approved GPU vCPU quota —
+full prerequisites and per-step checks in **[docs/setup.md](docs/setup.md)**.
+
 ## Build sequence
 
 Each step has something to check before moving on.
