@@ -1,8 +1,11 @@
 ## Production-Grade LLM Serving with vLLM on Amazon EKS
 (Terraform + NVIDIA GPU Operator)
 
-One model, one GPU, served over vLLM's OpenAI-compatible API. Every piece of infrastructure
-comes from Terraform, so the cluster can be rebuilt or destroyed with one command.
+This project shows how to:
+
+- serve open-source LLMs on Kubernetes
+- expose them through an OpenAI-compatible inference endpoint. For example: /v1/completions or /v1/chat/completions
+- use GPU infrastructure and Terraform for reproducible deployment
 
 ![vLLM model serving on Amazon EKS](docs/vllm-serving-eks-architecture.drawio.png)
 
