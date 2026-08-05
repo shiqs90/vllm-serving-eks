@@ -2,8 +2,8 @@
 (Terraform + NVIDIA GPU Operator)
 
 Provision a GPU on **AWS EKS with Terraform**, installed the **NVIDIA GPU Operator**, and served
-**Qwen2.5-7B-Instruct-AWQ** through **vLLM's OpenAI-compatible API** — a production-shaped model
-inference endpoint, reachable via `curl /v1/completions`.
+**Qwen2.5-7B-Instruct-AWQ** through **vLLM's OpenAI-compatible API**
+i.e. a production-shaped model inference endpoint, reachable via `curl /v1/completions`.
 
 ![vLLM model serving on Amazon EKS](docs/vllm-serving-eks-architecture.drawio.png)
 
@@ -33,9 +33,9 @@ This is the AI infrastructure engineer's job. Someone else trains the model and 
 | Test client | **curl** | Hits `/v1/completions`. That response is the checkpoint. |
 
 ## Why self-host instead of calling an API?
- Self-hosting wins on **cost-at-scale
- Data/privacy - prompts stay in your VPC
- Latency & model control- the ability to run whatever model you want
+- Self-hosting wins on **cost-at-scale.
+- Data/privacy - prompts stay in your VPC.
+- Latency & model control- the ability to run whatever model you want.
 
 
 ## Open source Vs Closed source models
