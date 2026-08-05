@@ -1,11 +1,9 @@
 ## Production-Grade LLM Serving with vLLM on Amazon EKS
 (Terraform + NVIDIA GPU Operator)
 
-This project shows how to:
-
-- serve open-source LLMs on Kubernetes
-- expose them through an OpenAI-compatible inference endpoint. For example: /v1/completions or /v1/chat/completions
-- use GPU infrastructure and Terraform for reproducible deployment
+Provision a GPU on **AWS EKS with Terraform**, installed the **NVIDIA GPU Operator**, and served
+**Qwen2.5-7B-Instruct-AWQ** through **vLLM's OpenAI-compatible API** — a production-shaped model
+inference endpoint, reachable via `curl /v1/completions`.
 
 ![vLLM model serving on Amazon EKS](docs/vllm-serving-eks-architecture.drawio.png)
 
@@ -19,9 +17,10 @@ Those two flags are the KV-cache-vs-OOM tradeoff.
 
 ## What's actually being deployed
 
-There is no app and no dataset here. The deliverable is an **inference API**: an HTTP endpointthat takes a prompt and returns generated text. 
+There is no app and no dataset here. The deliverable is an **inference API**: an HTTP endpoint that takes a prompt and returns generated text. 
+
 Everything below exists to get one model onto one GPU and keep it serving.
-This is the AI infra job. Someone else trains the model and someone else builds the product on top.
+This is the AI infrastructure engineer's job. Someone else trains the model and you deploy/serve the model.
 
 | Layer | Tool | What it does here |
 |---|---|---|
@@ -33,8 +32,32 @@ This is the AI infra job. Someone else trains the model and someone else builds 
 | Package manager | **Helm** | Installs the GPU Operator chart (roughly six components) in one go, via Terraform's `helm_release`. vLLM is *not* Helm here, just `kubectl apply`. |
 | Test client | **curl** | Hits `/v1/completions`. That response is the checkpoint. |
 
-**Why self-host instead of calling an API?** Cost at scale, prompts that never leave the VPC,
-latency you control, and the ability to run whatever model you want.
+## Why self-host instead of calling an API?
+ Self-hosting wins on **cost-at-scale
+ Data/privacy - prompts stay in your VPC
+ Latency & model control- the ability to run whatever model you want
+
+
+## Open source Vs Closed source models
+**Open source model** — weights are downloadable (Hugging Face, etc.). You get the actual parameter file, can run it on your own GPU, fine-tune it, inspect it, no per-token fee to a vendor. Examples: Llama, Qwen, Mistral, DeepSeek.
+
+**Closed source model** — you only get an API endpoint (OpenAI's GPT, Anthropic's Claude, Google's Gemini). No weights, no self-hosting — you send a prompt over HTTPS and pay per token. The company keeps the model itself locked away. 
+
+You can't self-host a closed model. There are no weights to put on a GPU
+
+## Why Kubernetes
+
+ Kubernetes earns its place on what comes after:
+
+- **Scheduling** — GPUs become a countable resource (`nvidia.com/gpu: 1`), not just a machine.
+- **Isolation** — taints and requests keep cheap pods off the expensive card and stop two containers fighting over one GPU.
+- **Self-healing** — pod dies, it restarts behind a stable Service address.
+- **Autoscaling** — HPA/KEDA on the pod, node group to zero between sessions.
+- **Rollouts** — canary and blue/green are built-in primitives, not scripts.
+- **Ecosystem** — GPU Operator, DCGM metrics, MIG/time-slicing all ship as Kubernetes components.
+- **Portability** — same manifests on any cloud, which matters for a decentralized GPU platform.
+
+EKS specifically: AWS runs the control plane, and the accelerated AMI ships the NVIDIA driver.
 
 ## Technologies locked:
 
@@ -95,12 +118,12 @@ vllm-serving-eks/
 ```
 
 The GPU Operator lives in Terraform so `terraform destroy` cleans it up with everything else.
-vLLM stays as a plain manifest because that's the file I edit most.
+vLLM stays as a plain manifest.
 
 ## Setup
 
 You need AWS CLI, Terraform, kubectl and Helm locally, plus an approved GPU vCPU quota —
-full prerequisites and per-step checks in **[docs/setup.md](docs/setup.md)**.
+Full prerequisites and per-step checks in **[docs/setup.md](docs/setup.md)**.
 
 ## Build sequence
 
@@ -127,7 +150,7 @@ Each step has something to check before moving on.
    *Check:* it ends with `✅ Project verification complete.` If you'd rather do it by hand:
    ```bash
    kubectl port-forward svc/vllm 8000:8000
-   curl localhost:8000/v1/completions -d '{"model":"Qwen/Qwen2.5-7B-Instruct-AWQ","prompt":"Hello, my name is","max_tokens":20}'
+   curl localhost:8000/v1/completions -H "Content-Type: application/json" -d '{"model":"Qwen/Qwen2.5-7B-Instruct-AWQ","prompt":"Hello, my name is","max_tokens":20}'
    kubectl exec deploy/vllm -- nvidia-smi
    ```
    Optionally curl the DCGM exporter for `DCGM_FI_DEV_FB_USED` as a preview of project 4.

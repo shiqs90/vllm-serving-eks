@@ -1,10 +1,12 @@
 # Project: vLLM on EKS Summary
 ---
 
-## 1. What we built (one sentence)
-Provisioned a GPU on **AWS EKS with Terraform**, installed the **NVIDIA GPU Operator**, and served
-**Qwen2.5-7B-Instruct-AWQ** through **vLLM's OpenAI-compatible API** — a production-shaped model
-inference endpoint, reachable via `curl /v1/completions`.
+## 1. What we built
+This project shows how to:
+
+- serve open-source LLMs on GPU infrastructure in Kubernetes
+- expose them through an OpenAI-compatible inference endpoint. For example: /v1/completions or /v1/chat/completions
+- use AWS as Cloud and Terraform for reproducible deployment
 
 ## 2. The stack, top to bottom (know this cold)
 | Layer | Tool | Role in one line |
@@ -94,15 +96,6 @@ bash scripts/verify.sh
 | `kubectl exec deploy/vllm -- nvidia-smi` | Real VRAM number to compare against the KV-cache math below |
 | grep the logs for `Available KV cache memory` / `Maximum concurrency` | The KV-cache evidence, which is the flagship talking point |
 
-Two design choices worth defending:
-
-- **The timeout is 900s, not 300s.** It has to exceed the `startupProbe` runway (60 × 10s ≈ 10 min),
-  or the verifier fails a pod that is merely still loading — a false negative that looks like a
-  crash. Verification timeouts must be *looser* than the probe they're waiting on.
-- **It asserts rather than prints.** An earlier `smoke-test.sh` piped the response to `jq` and
-  exited 0 regardless, so an error JSON body counted as a pass. It was deleted; grepping for
-  `"text"` and exiting non-zero is what makes this usable as a CI gate in project 7.
-
 ### KV cache vs OOM
 
 This is the flagship discussion, so here's the Math-
@@ -124,7 +117,7 @@ vLLM prints a "# GPU blocks" / KV cache line at startup. That line is the eviden
 math was right.
 
 
-## 3. THE headline talking point — KV-cache vs OOM (memorize the numbers)
+## 3. KV-cache vs OOM (memorize the numbers)
 On a **24 GB L4**, with `--gpu-memory-utilization=0.90` and `--max-model-len=8192`:
 - Budget ≈ 20.7 GiB → weights **5.3 GiB** → **KV cache 13.34 GiB = 249,776 tokens = 30.49× concurrency**
 - Actual GPU use ≈ **19.5 / 23 GiB (~85%)**, under the 0.90 ceiling
@@ -132,10 +125,6 @@ On a **24 GB L4**, with `--gpu-memory-utilization=0.90` and `--max-model-len=819
 > "Raise utilization → more KV cache/throughput but less OOM headroom. Lower `--max-model-len` →
 > shorter max context but more concurrent sequences. OOM on boot? drop util 0.90→0.85, then
 > max-model-len 8192→4096, then max-num-seqs, then `--enforce-eager`."
-
-## 4. Why self-host vs. calling Claude/OpenAI
-Building the serving platform **is the job**. Self-hosting wins on **cost-at-scale, data privacy
-(prompts stay in your VPC), latency, and model control** — a hosted API would delete the infra role.
 
 ---
 
