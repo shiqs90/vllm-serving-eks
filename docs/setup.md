@@ -18,6 +18,8 @@
   ```
 - Region: `us-east-1` (has g6 capacity + quota); switch if you hit `InsufficientInstanceCapacity`.
 - Model `Qwen/Qwen2.5-7B-Instruct-AWQ` is ungated on HF — no token needed.
+- **g6 vs g5.** g6.xlarge (L4) is the default and the cheaper card. g5.xlarge (A10G) is the
+  one-variable fallback if capacity or quota doesn't line up.
 
 ---
 

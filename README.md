@@ -79,8 +79,23 @@ EKS specifically: AWS runs the control plane, and the accelerated AMI ships the 
 1× **g6.xlarge** (NVIDIA L4, 24 GB VRAM, ~$0.805/hr, 100 GB gp3 root) for the model, plus
 1× **m7i.large** CPU node so that CoreDNS and friends never land on the expensive card.
 
-The L4 was sized from the model. Qwen2.5-7B in 4-bit AWQ is about 5.3 GB of weights, which leaves
-roughly 13 GB of the 24 GB for KV cache once context and overhead are paid for.
+**Why the L4 is a good fit**
+On a 24 GB L4, the approximate memory allocation may look like:
+| Usage                           |   Approximate VRAM |
+| ------------------------------- | -----------------: |
+| Model weights                   |             5–6 GB |
+| CUDA/vLLM runtime               |             1–3 GB |
+| KV cache and request processing | Remaining 15–17 GB |
+
+Extra VRAM becomes vLLM KV cache.
+vLLM uses much of the available GPU memory for the KV cache, which stores attention information for active requests.
+More KV-cache memory means you can support:
+
+- More simultaneous requests
+- Longer prompts
+- Larger batches
+- Higher throughput
+- Fewer rejected or preempted requests
 
 ## Pinned versions
 
@@ -194,13 +209,6 @@ sessions and the entire project lands somewhere around **$15–30**.
 - Tag everything `project=vllm-serving-eks` and set a **$20 AWS Budgets alert**. The alert is
   the backstop for the night you forget.
 
-## Before you start
-
-- **AWS credentials.** `aws sts get-caller-identity` should work, and the GPU vCPU quota from
-  step 1 must be approved. The quota gates everything else.
-- **Region.** Default is `us-east-1`. Switch if you hit `InsufficientInstanceCapacity` on g6/g5.
-- **g6 vs g5.** g6.xlarge (L4) is the default and the cheaper card. g5.xlarge (A10G) is the
-  one-variable fallback if capacity or quota doesn't line up.
 
 ## Future Enhancements
 
