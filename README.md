@@ -35,7 +35,9 @@ This is the AI infrastructure engineer's job. Someone else trains the model and 
 ## Why self-host instead of calling an API?
 - Self-hosting wins on **cost-at-scale.
 - Data/privacy - prompts stay in your VPC.
-- Latency & model control- the ability to run whatever model you want.
+- Latency & model control- the ability to run whatever model you want.Scoped to this project alone — multi-model routing, GPU sharing, observability, canary,
+cost/quant benchmarking, CI/CD, autoscaling and chaos hardening are already covered as
+projects #2–#9.
 
 
 ## Open source Vs Closed source models
@@ -199,3 +201,15 @@ sessions and the entire project lands somewhere around **$15–30**.
 - **Region.** Default is `us-east-1`. Switch if you hit `InsufficientInstanceCapacity` on g6/g5.
 - **g6 vs g5.** g6.xlarge (L4) is the default and the cheaper card. g5.xlarge (A10G) is the
   one-variable fallback if capacity or quota doesn't line up.
+
+## Future Enhancements
+
+- **External access.** Replace `port-forward` with an AWS Load Balancer Controller (ALB/NLB)
+  or Ingress + TLS, so the endpoint is reachable without a live `kubectl` session.
+- **Model weight caching.** Back the model cache with an EBS or EFS persistent volume so the
+  ~11 GB download doesn't repeat every time a pod restarts or the GPU node scales back up
+  from zero.
+- **Centralized logging.** Ship vLLM and node logs to CloudWatch Logs (or similar) instead of
+  relying on `kubectl logs`, which disappears with the pod.
+- **HA / multi-AZ.** Currently single NAT gateway, single-AZ node groups — fine for a demo,
+  not for anything that needs to survive an AZ outage.
